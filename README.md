@@ -14,11 +14,11 @@
   </p>
 </div>
 
-## Command-Native Workflow Engine
+## Lightweight, Local-First, Declarative Workflow Engine
 
-Dagu is the command-native workflow engine AI agents need. It turns scripts, containers, server tasks, and agent CLIs into scheduled, observable, retryable production workflows.
+Dagu is a self-contained workflow engine. Workflows are defined in YAML and can run shell commands, scripts, containers, HTTP requests, SQL queries, SSH commands, sub-workflows, and AI agent steps.
 
-It runs as a single self-hosted binary with no required database, message broker, or language-specific runtime. Workflows are defined as DAGs (Directed Acyclic Graphs) in YAML, and all state is stored in local files by default.
+Dagu runs as a single binary and stores state in local files by default. It does not require a database, message broker, or language-specific SDK. It includes scheduling, dependencies, retries, queues, logs, a Web UI, and optional distributed workers.
 
 For a quick look at how workflows are defined, see the [examples](https://docs.dagu.sh/writing-workflows/examples).
 
