@@ -125,6 +125,7 @@ func (er *entryReaderImpl) Start(ctx context.Context) {
 					spec.OnlyMetadata(),
 					spec.WithoutEval(),
 					spec.SkipSchemaValidation(),
+					spec.WithDAGsDir(er.targetDir),
 				)
 				if err != nil {
 					logger.Error(ctx, "DAG load failed",
@@ -227,6 +228,7 @@ func (er *entryReaderImpl) initialize(ctx context.Context) error {
 				spec.OnlyMetadata(),
 				spec.WithoutEval(),
 				spec.SkipSchemaValidation(),
+				spec.WithDAGsDir(er.targetDir),
 			)
 			if err != nil {
 				logger.Error(ctx, "DAG load failed",

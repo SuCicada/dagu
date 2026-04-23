@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	"github.com/dagu-org/dagu/internal/common/signal"
 	"github.com/dagu-org/dagu/internal/core"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/samber/lo"
 )
 
 // BuilderFn is a function that builds a part of the DAG.
@@ -163,7 +165,7 @@ func build(ctx BuildContext, spec *definition) (*core.DAG, error) {
 		Timeout:        time.Second * time.Duration(spec.TimeoutSec),
 		Delay:          time.Second * time.Duration(spec.DelaySec),
 		RestartWait:    time.Second * time.Duration(spec.RestartWaitSec),
-		Tags:           parseTags(spec.Tags),
+		Tags:           buildTags(ctx, spec.Tags),
 		MaxActiveSteps: spec.MaxActiveSteps,
 		Queue:          strings.TrimSpace(spec.Queue),
 		MaxOutputSize:  spec.MaxOutputSize,
@@ -228,6 +230,50 @@ func parseTags(value any) []string {
 		}
 	}
 
+	return ret
+}
+
+// buildTags merges manually-defined tags with directory-derived tags.
+// Directory tags are extracted from the DAG file path relative to opts.DAGsDir.
+func buildTags(ctx BuildContext, value any) []string {
+	manualTags := parseTags(value)
+	dirTags := tagsFromDirectory(ctx.file, ctx.opts.DAGsDir)
+
+	logger.Debug(ctx.ctx, "build tags",
+		slog.String("file", ctx.file),
+		slog.String("dagsDir", ctx.opts.DAGsDir),
+		slog.String("manualTags", strings.Join(manualTags, ",")),
+		slog.String("dirTags", strings.Join(dirTags, ",")),
+	)
+
+	merged := append(manualTags, dirTags...)
+	normalized := lo.FilterMap(merged, func(t string, _ int) (string, bool) {
+		tag := strings.ToLower(strings.TrimSpace(t))
+		return tag, tag != ""
+	})
+	return lo.Uniq(normalized)
+}
+
+// tagsFromDirectory returns all directory levels as tags for a DAG file.
+// Example: dags/teamA/etl/job.yaml -> ["teama", "etl"].
+func tagsFromDirectory(filePath, dagsDir string) []string {
+	if filePath == "" || dagsDir == "" {
+		return nil
+	}
+
+	rel, err := filepath.Rel(filepath.Clean(dagsDir), filepath.Dir(filepath.Clean(filePath)))
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		return nil
+	}
+
+	parts := strings.Split(rel, string(filepath.Separator))
+	ret := make([]string, 0, len(parts))
+	for _, part := range parts {
+		tag := strings.ToLower(strings.TrimSpace(part))
+		if tag != "" && tag != "." {
+			ret = append(ret, tag)
+		}
+	}
 	return ret
 }
 

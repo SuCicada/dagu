@@ -1,4 +1,5 @@
 #!/usr/bin/env /bin/sh
+# shellcheck shell=bash
 
 # Check if both DOCKER_GID is not -1. This indicates the desire for a docker group
 if [ "$DOCKER_GID" != "-1" ]; then

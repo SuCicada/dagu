@@ -28,6 +28,7 @@ require (
 	github.com/itchyny/gojq v0.12.17
 	github.com/jedib0t/go-pretty/v6 v6.6.8
 	github.com/joho/godotenv v1.5.1
+	github.com/k1LoW/sshc/v4 v4.3.2
 	github.com/mholt/archives v0.1.5
 	github.com/nektos/act v0.2.82
 	github.com/oapi-codegen/nethttp-middleware v1.1.2
@@ -46,7 +47,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.37.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.37.0
 	go.opentelemetry.io/otel/sdk v1.38.0
-	golang.org/x/text v0.29.0
+	golang.org/x/text v0.31.0
 	google.golang.org/grpc v1.74.2
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1
 	gotest.tools/gotestsum v1.12.3
@@ -60,10 +61,12 @@ require (
 	github.com/AdminBenni/iota-mixing v1.0.0 // indirect
 	github.com/AlwxSin/noinlineerr v1.0.5 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
+	github.com/IGLOU-EU/go-wildcard/v2 v2.1.0 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/MirrexOne/unqueryvet v1.2.1 // indirect
 	github.com/ProtonMail/go-crypto v1.1.6 // indirect
 	github.com/STARRY-S/zip v0.2.3 // indirect
+	github.com/ScaleFT/sshkeys v1.4.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.20.0 // indirect
 	github.com/alfatraining/structtag v1.0.0 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
@@ -79,6 +82,7 @@ require (
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
+	github.com/dchest/bcrypt_pbkdf v0.0.0-20150205184540-83f37f9c154a // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/docker/cli v28.4.0+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.8.2 // indirect
@@ -102,6 +106,7 @@ require (
 	github.com/hashicorp/go-plugin v1.6.3 // indirect
 	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
+	github.com/k1LoW/exec v0.3.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
@@ -358,11 +363,11 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20250911091902-df9299821621 // indirect
-	golang.org/x/mod v0.28.0 // indirect
+	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/oauth2 v0.31.0
-	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/term v0.35.0
-	golang.org/x/tools v0.37.0 // indirect
+	golang.org/x/sync v0.18.0 // indirect
+	golang.org/x/term v0.37.0
+	golang.org/x/tools v0.38.0 // indirect
 	google.golang.org/protobuf v1.36.9
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -376,9 +381,9 @@ require (
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/samber/lo v1.51.0
-	golang.org/x/crypto v0.42.0
-	golang.org/x/net v0.44.0 // indirect
+	github.com/samber/lo v1.53.0
+	golang.org/x/crypto v0.45.0
+	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sys v0.38.0
 	gopkg.in/yaml.v3 v3.0.1
 )

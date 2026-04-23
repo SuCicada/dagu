@@ -117,6 +117,7 @@ func (store *Storage) GetMetadata(ctx context.Context, name string) (*core.DAG, 
 			spec.OnlyMetadata(),
 			spec.WithoutEval(),
 			spec.SkipSchemaValidation(),
+			spec.WithDAGsDir(store.baseDir),
 		)
 	}
 	return store.fileCache.LoadLatest(filePath, func() (*core.DAG, error) {
@@ -124,6 +125,7 @@ func (store *Storage) GetMetadata(ctx context.Context, name string) (*core.DAG, 
 			spec.OnlyMetadata(),
 			spec.WithoutEval(),
 			spec.SkipSchemaValidation(),
+			spec.WithDAGsDir(store.baseDir),
 		)
 	})
 }
@@ -136,7 +138,7 @@ func (store *Storage) GetDetails(ctx context.Context, name string, opts ...spec.
 	}
 	var loadOpts []spec.LoadOption
 	loadOpts = append(loadOpts, opts...)
-	loadOpts = append(loadOpts, spec.WithoutEval())
+	loadOpts = append(loadOpts, spec.WithoutEval(), spec.WithDAGsDir(store.baseDir))
 
 	dat, err := spec.Load(ctx, filePath, loadOpts...)
 	if err != nil {
@@ -254,24 +256,20 @@ func (store *Storage) List(ctx context.Context, opts execution.ListDAGsOptions) 
 		opts.Paginator = &p
 	}
 
-	entries, err := os.ReadDir(store.baseDir)
+	filePaths, err := walkYAMLFiles(store.baseDir)
 	if err != nil {
 		errList = append(errList, fmt.Sprintf("failed to read directory %s: %s", store.baseDir, err))
 		return execution.NewPaginatedResult([]*core.DAG{}, 0, *opts.Paginator), errList, err
 	}
 
 	// First, collect all matching DAGs
-	for _, entry := range entries {
+	for _, filePath := range filePaths {
 		// Check context cancellation
 		if ctx.Err() != nil {
 			return execution.NewPaginatedResult([]*core.DAG{}, 0, *opts.Paginator), nil, ctx.Err()
 		}
 
-		if entry.IsDir() || !fileutil.IsYAMLFile(entry.Name()) {
-			continue
-		}
-
-		baseName := path.Base(entry.Name())
+		baseName := path.Base(filePath)
 		dagName := strings.TrimSuffix(baseName, path.Ext(baseName))
 		if opts.Name != "" && opts.Tag == "" {
 			// If tag is not provided, check before reading the file to avoid
@@ -284,12 +282,12 @@ func (store *Storage) List(ctx context.Context, opts execution.ListDAGsOptions) 
 
 		// Read the file and parse the DAG.
 		// Use WithAllowBuildErrors to include DAGs with errors in the list
-		filePath := filepath.Join(store.baseDir, entry.Name())
 		dag, err := spec.Load(ctx, filePath,
 			spec.OnlyMetadata(),
 			spec.WithoutEval(),
 			spec.SkipSchemaValidation(),
 			spec.WithAllowBuildErrors(),
+			spec.WithDAGsDir(store.baseDir),
 		)
 		if err != nil {
 			// If it completely fails to load, skip it
@@ -399,46 +397,45 @@ func (store *Storage) Grep(ctx context.Context, pattern string) (
 		return
 	}
 
-	entries, err := os.ReadDir(store.baseDir)
+	filePaths, err := walkYAMLFiles(store.baseDir)
 	if err != nil {
 		logger.Error(ctx, "Failed to read directory",
 			tag.Dir(store.baseDir),
 			tag.Error(err))
 	}
 
-	for _, entry := range entries {
-		if fileutil.IsYAMLFile(entry.Name()) {
-			filePath := filepath.Join(store.baseDir, entry.Name())
-			dat, err := os.ReadFile(filePath) //nolint:gosec
-			if err != nil {
-				logger.Error(ctx, "Failed to read DAG file",
-					tag.File(entry.Name()),
-					tag.Error(err))
-				continue
-			}
-			matches, err := grep.Grep(dat, fmt.Sprintf("(?i)%s", pattern), grep.DefaultGrepOptions)
-			if err != nil {
-				if errors.Is(err, grep.ErrNoMatch) {
-					continue
-				}
-				errs = append(errs, fmt.Sprintf("grep %s failed: %s", entry.Name(), err))
-				continue
-			}
-			dag, err := spec.Load(ctx, filePath,
-				spec.OnlyMetadata(),
-				spec.WithoutEval(),
-				spec.SkipSchemaValidation(),
-			)
-			if err != nil {
-				errs = append(errs, fmt.Sprintf("check %s failed: %s", entry.Name(), err))
-				continue
-			}
-			ret = append(ret, &execution.GrepDAGsResult{
-				Name:    strings.TrimSuffix(entry.Name(), path.Ext(entry.Name())),
-				DAG:     dag,
-				Matches: matches,
-			})
+	for _, filePath := range filePaths {
+		entryName := filepath.Base(filePath)
+		dat, err := os.ReadFile(filePath) //nolint:gosec
+		if err != nil {
+			logger.Error(ctx, "Failed to read DAG file",
+				tag.File(entryName),
+				tag.Error(err))
+			continue
 		}
+		matches, err := grep.Grep(dat, fmt.Sprintf("(?i)%s", pattern), grep.DefaultGrepOptions)
+		if err != nil {
+			if errors.Is(err, grep.ErrNoMatch) {
+				continue
+			}
+			errs = append(errs, fmt.Sprintf("grep %s failed: %s", entryName, err))
+			continue
+		}
+		dag, err := spec.Load(ctx, filePath,
+			spec.OnlyMetadata(),
+			spec.WithoutEval(),
+			spec.SkipSchemaValidation(),
+			spec.WithDAGsDir(store.baseDir),
+		)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("check %s failed: %s", entryName, err))
+			continue
+		}
+		ret = append(ret, &execution.GrepDAGsResult{
+			Name:    strings.TrimSuffix(entryName, path.Ext(entryName)),
+			DAG:     dag,
+			Matches: matches,
+		})
 	}
 	return ret, errs, nil
 }
@@ -519,23 +516,19 @@ func (store *Storage) TagList(ctx context.Context) ([]string, []string, error) {
 		tagSet  = make(map[string]struct{})
 	)
 
-	entries, err := os.ReadDir(store.baseDir)
+	filePaths, err := walkYAMLFiles(store.baseDir)
 	if err != nil {
 		errList = append(errList, fmt.Sprintf("failed to read directory %s: %s", store.baseDir, err))
 		return nil, errList, err
 	}
 
-	for _, entry := range entries {
-		if entry.IsDir() || !fileutil.IsYAMLFile(entry.Name()) {
-			continue
-		}
-
-		baseName := path.Base(entry.Name())
+	for _, filePath := range filePaths {
+		baseName := path.Base(filePath)
 		dagName := strings.TrimSuffix(baseName, path.Ext(baseName))
 
 		parsedDAG, err := store.GetMetadata(ctx, dagName)
 		if err != nil {
-			errList = append(errList, fmt.Sprintf("reading %s failed: %s", entry.Name(), err))
+			errList = append(errList, fmt.Sprintf("reading %s failed: %s", baseName, err))
 			continue
 		}
 
@@ -549,6 +542,26 @@ func (store *Storage) TagList(ctx context.Context) ([]string, []string, error) {
 		tagList = append(tagList, tag)
 	}
 	return tagList, errList, nil
+}
+
+func walkYAMLFiles(root string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if fileutil.IsYAMLFile(d.Name()) {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return files, nil
 }
 
 // CreateFlag creates the given file.
