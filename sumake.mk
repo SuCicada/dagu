@@ -12,3 +12,6 @@ run:
 	DAGU_DEBUG=true \
 	go run -v ./cmd start-all
 
+.PHONY: deploy
+deploy:
+	cd ../SuConfig/linux/asus && make docker-dagu

@@ -153,13 +153,8 @@ func (a *API) GetDAGSpec(ctx context.Context, request api.GetDAGSpecRequestObjec
 		return nil, err
 	}
 
-	// Validate the spec - use WithAllowBuildErrors to return DAG even with errors
-	dag, err := spec.LoadYAML(ctx,
-		[]byte(yamlSpec),
-		spec.WithName(request.FileName),
-		spec.WithAllowBuildErrors(),
-		spec.WithoutEval(),
-	)
+	// Validate the spec through the DAG store so file IDs remain a storage concern.
+	dag, err := a.dagStore.GetDetails(ctx, request.FileName, spec.WithAllowBuildErrors())
 	var errs []string
 
 	var loadErrs core.ErrorList
@@ -454,12 +449,13 @@ func (a *API) ListDAGs(ctx context.Context, request api.ListDAGsRequestObject) (
 	// Build DAG files for the paginated results
 	dagFiles := make([]api.DAGFile, 0, len(result.Items))
 	for _, item := range result.Items {
+		fileName := dagFileID(a.dagStore, item)
 		dagStatus, err := a.dagRunMgr.GetLatestStatus(ctx, item)
 		if err != nil {
 			errList = append(errList, err.Error())
 		}
 
-		suspended := a.dagStore.IsSuspended(ctx, item.FileName())
+		suspended := a.dagStore.IsSuspended(ctx, fileName)
 		dagRun := toDAGRunSummary(dagStatus)
 
 		// Include any build errors from the DAG
@@ -471,7 +467,7 @@ func (a *API) ListDAGs(ctx context.Context, request api.ListDAGsRequestObject) (
 		}
 
 		dagFile := api.DAGFile{
-			FileName:     item.FileName(),
+			FileName:     fileName,
 			LatestDAGRun: dagRun,
 			Suspended:    suspended,
 			Dag:          toDAG(item),
@@ -947,4 +943,17 @@ func (a *API) StopAllDAGRuns(ctx context.Context, request api.StopAllDAGRunsRequ
 	return &api.StopAllDAGRuns200JSONResponse{
 		Errors: errors,
 	}, nil
+}
+
+type dagFileIDProvider interface {
+	FileID(*core.DAG) string
+}
+
+func dagFileID(store execution.DAGStore, dag *core.DAG) string {
+	if provider, ok := store.(dagFileIDProvider); ok {
+		if id := provider.FileID(dag); id != "" {
+			return id
+		}
+	}
+	return dag.FileName()
 }

@@ -101,6 +101,26 @@ type Storage struct {
 	skipExamples bool                       // Skip creating example DAGs
 }
 
+// FileID returns the stable API identifier for a DAG file.
+func (store *Storage) FileID(dag *core.DAG) string {
+	if dag == nil || dag.Location == "" {
+		return ""
+	}
+	baseDir, err := filepath.Abs(store.baseDir)
+	if err != nil {
+		return dag.FileName()
+	}
+	location, err := filepath.Abs(dag.Location)
+	if err != nil {
+		return dag.FileName()
+	}
+	rel, err := filepath.Rel(baseDir, location)
+	if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." || filepath.IsAbs(rel) {
+		return dag.FileName()
+	}
+	return encodeDAGFileID(fileutil.TrimYAMLFileExtension(rel))
+}
+
 // Initialize ensures the storage is ready and creates example DAGs if needed
 func (store *Storage) Initialize() error {
 	return store.ensureDirExist()
@@ -175,7 +195,7 @@ func (store *Storage) UpdateSpec(ctx context.Context, name string, yamlSpec []by
 	dag, err := spec.LoadYAML(ctx,
 		yamlSpec,
 		spec.WithoutEval(),
-		spec.WithName(name),
+		spec.WithName(defaultDAGNameFromFileID(name)),
 	)
 	if err != nil {
 		return err
@@ -493,20 +513,55 @@ func (store *Storage) locateDAG(nameOrPath string) (string, error) {
 		}
 	}
 
+	candidates := []string{nameOrPath}
+	if decoded, ok := decodeDAGFileID(nameOrPath); ok && decoded != nameOrPath {
+		candidates = append(candidates, decoded)
+	}
+
 	for _, dir := range store.searchPaths {
 		absDir, err := filepath.Abs(dir)
 		if err != nil {
 			continue
 		}
-		candidatePath := filepath.Join(absDir, nameOrPath)
-		foundPath, err := findDAGFile(candidatePath)
-		if err == nil {
-			return foundPath, nil
+		for _, candidate := range candidates {
+			candidatePath := filepath.Join(absDir, candidate)
+			foundPath, err := findDAGFile(candidatePath)
+			if err == nil {
+				return foundPath, nil
+			}
 		}
 	}
 
 	// DAG not found
 	return "", fmt.Errorf("DAG %s not found: %w", nameOrPath, os.ErrNotExist)
+}
+
+func encodeDAGFileID(rel string) string {
+	return strings.ReplaceAll(filepath.ToSlash(rel), "/", "~")
+}
+
+func decodeDAGFileID(id string) (string, bool) {
+	if !strings.Contains(id, "~") {
+		return id, true
+	}
+	decoded := strings.ReplaceAll(id, "~", string(filepath.Separator))
+	if filepath.IsAbs(decoded) {
+		return "", false
+	}
+	for _, part := range strings.Split(decoded, string(filepath.Separator)) {
+		if part == ".." {
+			return "", false
+		}
+	}
+	return decoded, true
+}
+
+func defaultDAGNameFromFileID(id string) string {
+	decoded, ok := decodeDAGFileID(id)
+	if !ok || decoded == "" {
+		return id
+	}
+	return fileutil.TrimYAMLFileExtension(filepath.Base(decoded))
 }
 
 // TagList lists all unique tags from the DAGs.

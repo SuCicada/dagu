@@ -17,10 +17,15 @@ ARG LDFLAGS
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /app
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download -x
 COPY . .
-RUN go mod download && rm -rf frontend/assets
+RUN rm -rf frontend/assets
+
 COPY --from=ui-builder /app/dist/ ./internal/service/frontend/assets/
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="${LDFLAGS}" -o ./bin/dagu ./cmd
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="${LDFLAGS}" -o ./bin/dagu -v ./cmd
 
 # Stage 3: Final Image
 FROM --platform=$TARGETPLATFORM ubuntu:24.04
@@ -49,8 +54,10 @@ RUN apt-get update && \
     sudo \
     tzdata \
     jq \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    net-tools \
+    iputils-ping \
+    curl \
+    wget vim ssh-client
 
 COPY --from=go-builder /app/bin/dagu /usr/local/bin/
 COPY ./entrypoint.sh /entrypoint.sh

@@ -38,7 +38,7 @@ func TestListDAGsInSubdirectories(t *testing.T) {
 		_ = os.RemoveAll(tmpDir)
 	}()
 
-	store := New(tmpDir, WithSkipExamples(true))
+	store := New(tmpDir, WithSkipExamples(true)).(*Storage)
 	ctx := context.Background()
 
 	// Create DAG files in different directory levels
@@ -80,11 +80,75 @@ steps:
 	require.NoError(t, err)
 	require.Empty(t, errList)
 
-	// Should find only 1 DAG (the root-level one)
-	require.Len(t, result.Items, 1, "Should only find DAGs in root directory, not subdirectories")
+	require.Len(t, result.Items, 3, "Should find DAGs in root and subdirectories")
 
-	// Verify only the root DAG is found
-	require.Equal(t, "root-dag", result.Items[0].Name, "Should only find root-dag")
+	fileIDs := make(map[string]string)
+	for _, item := range result.Items {
+		fileIDs[item.Name] = store.FileID(item)
+	}
+	require.Equal(t, "root-dag", fileIDs["root-dag"])
+	require.Equal(t, "subdir~sub-dag", fileIDs["sub-dag"])
+	require.Equal(t, "subdir~nested~nested-dag", fileIDs["nested-dag"])
+}
+
+func TestGetDetailsWithEncodedSubdirectoryFileID(t *testing.T) {
+	tmpDir := fileutil.MustTempDir("test-get-details-subdir")
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	store := New(tmpDir, WithSkipExamples(true)).(*Storage)
+	ctx := context.Background()
+
+	subDir := filepath.Join(tmpDir, "backup")
+	err := os.MkdirAll(subDir, 0750)
+	require.NoError(t, err)
+
+	dagContent := `name: vbox-snapshot
+steps:
+  - name: step1
+    command: echo "snapshot"`
+	err = os.WriteFile(filepath.Join(subDir, "vbox-snapshot.yaml"), []byte(dagContent), 0600)
+	require.NoError(t, err)
+
+	dag, err := store.GetDetails(ctx, "backup~vbox-snapshot")
+	require.NoError(t, err)
+	require.Equal(t, "vbox-snapshot", dag.Name)
+	require.Equal(t, "backup~vbox-snapshot", store.FileID(dag))
+}
+
+func TestUpdateSpecWithEncodedSubdirectoryFileID(t *testing.T) {
+	tmpDir := fileutil.MustTempDir("test-update-spec-subdir")
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	store := New(tmpDir, WithSkipExamples(true)).(*Storage)
+	ctx := context.Background()
+
+	subDir := filepath.Join(tmpDir, "backup")
+	err := os.MkdirAll(subDir, 0750)
+	require.NoError(t, err)
+
+	initial := `schedule: "0 3 * * *"
+steps:
+  - name: step1
+    command: echo "initial"`
+	err = os.WriteFile(filepath.Join(subDir, "vbox-snapshot.yaml"), []byte(initial), 0600)
+	require.NoError(t, err)
+
+	updated := `schedule: "0 4 * * *"
+steps:
+  - name: step1
+    command: echo "updated"`
+	err = store.UpdateSpec(ctx, "backup~vbox-snapshot", []byte(updated))
+	require.NoError(t, err)
+
+	dag, err := store.GetDetails(ctx, "backup~vbox-snapshot")
+	require.NoError(t, err)
+	require.Equal(t, "vbox-snapshot", dag.Name)
+	require.Len(t, dag.Schedule, 1)
+	require.Equal(t, "0 4 * * *", dag.Schedule[0].Expression)
 }
 
 func TestGetMetadata(t *testing.T) {

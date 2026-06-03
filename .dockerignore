@@ -42,7 +42,6 @@ tmp/
 testdata/
 
 # CI/CD
-.github/
 
 # Development files
 docker-compose*.yml
@@ -51,3 +50,6 @@ deploy/
 # Kubernetes
 *.yaml
 !ui/*.yaml
+/data
+.local
+.agents/
