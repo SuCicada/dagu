@@ -212,7 +212,12 @@ func LoadYAMLWithOpts(ctx context.Context, data []byte, opts BuildOpts) (*core.D
 		return nil, core.ErrorList{err}
 	}
 
-	return build(BuildContext{ctx: ctx, opts: opts}, def)
+	dag, err := build(BuildContext{ctx: ctx, opts: opts}, def)
+	if err != nil {
+		return nil, err
+	}
+	applyDefaultRetryPolicy(dag)
+	return dag, nil
 }
 
 // LoadBaseConfig loads the global configuration from the given file.
@@ -389,6 +394,11 @@ func loadDAGsFromFile(ctx BuildContext, filePath string, baseDef *definition) ([
 		if err := merge(dest, dag); err != nil {
 			return nil, fmt.Errorf("failed to merge core.DAG in document %d: %w", docIndex, err)
 		}
+
+		// Apply the (possibly inherited from base) default retry policy to any
+		// step that does not define its own. Done after merge so a default set
+		// in base.yaml reaches this DAG's steps.
+		applyDefaultRetryPolicy(dest)
 
 		// Set the location for the core.DAG
 		dest.Location = filePath

@@ -37,6 +37,10 @@ type definition struct {
 	HandlerOn handlerOnDef
 	// Steps is the list of steps to run.
 	Steps any // []stepDef or map[string]stepDef
+	// RetryPolicy is the default retry policy applied to every step that does
+	// not define its own retryPolicy. It can be set in base.yaml to apply a
+	// default retry policy to all DAGs.
+	RetryPolicy *retryPolicyDef
 	// SMTP is the SMTP configuration.
 	SMTP smtpConfigDef
 	// MailOn is the mail configuration.
@@ -185,6 +189,7 @@ type repeatPolicyDef struct {
 
 // retryPolicyDef defines the retry policy for a step.
 type retryPolicyDef struct {
+	Enabled        *bool `yaml:"enabled,omitempty"`
 	Limit          any   `yaml:"limit,omitempty"`
 	IntervalSec    any   `yaml:"intervalSec,omitempty"`
 	ExitCode       []int `yaml:"exitCode,omitempty"`

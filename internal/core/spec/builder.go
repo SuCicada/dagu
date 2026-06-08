@@ -119,6 +119,7 @@ var builderRegistry = []builderEntry{
 	{name: "maxCleanUpTime", fn: maxCleanUpTime},
 	{name: "preconditions", fn: buildPrecondition},
 	{name: "otel", fn: buildOTel},
+	{name: "retryPolicy", fn: buildDefaultRetryPolicy},
 	{name: "steps", fn: buildSteps},
 }
 
@@ -1437,67 +1438,139 @@ func buildContinueOn(_ StepBuildContext, def stepDef, step *core.Step) error {
 // buildRetryPolicy builds the retry policy for a step.
 func buildRetryPolicy(_ StepBuildContext, def stepDef, step *core.Step) error {
 	if def.RetryPolicy != nil {
-		switch v := def.RetryPolicy.Limit.(type) {
-		case int:
-			step.RetryPolicy.Limit = v
-			step.RetryPolicy.Limit = int(v)
-		case int64:
-			step.RetryPolicy.Limit = int(v)
-		case uint64:
-			step.RetryPolicy.Limit = int(v)
-		case string:
-			step.RetryPolicy.LimitStr = v
-		default:
-			return core.NewValidationError("retryPolicy.Limit", v, fmt.Errorf("invalid type: %T", v))
+		// Explicit opt-out: disable retries for this step and prevent any
+		// DAG-level default from being applied to it.
+		if def.RetryPolicy.Enabled != nil && !*def.RetryPolicy.Enabled {
+			step.RetryPolicy = core.RetryPolicy{Disabled: true}
+			return nil
 		}
-
-		switch v := def.RetryPolicy.IntervalSec.(type) {
-		case int:
-			step.RetryPolicy.Interval = time.Second * time.Duration(v)
-		case int64:
-			step.RetryPolicy.Interval = time.Second * time.Duration(v)
-		case uint64:
-			step.RetryPolicy.Interval = time.Second * time.Duration(v)
-		case string:
-			step.RetryPolicy.IntervalSecStr = v
-		default:
-			return core.NewValidationError("retryPolicy.IntervalSec", v, fmt.Errorf("invalid type: %T", v))
-		}
-
-		if def.RetryPolicy.ExitCode != nil {
-			step.RetryPolicy.ExitCodes = def.RetryPolicy.ExitCode
-		}
-
-		// Parse backoff field
-		if def.RetryPolicy.Backoff != nil {
-			switch v := def.RetryPolicy.Backoff.(type) {
-			case bool:
-				if v {
-					step.RetryPolicy.Backoff = 2.0 // Default multiplier when true
-				}
-			case int:
-				step.RetryPolicy.Backoff = float64(v)
-			case int64:
-				step.RetryPolicy.Backoff = float64(v)
-			case float64:
-				step.RetryPolicy.Backoff = v
-			default:
-				return core.NewValidationError("retryPolicy.Backoff", v, fmt.Errorf("invalid type: %T", v))
-			}
-
-			// Validate backoff value
-			if step.RetryPolicy.Backoff > 0 && step.RetryPolicy.Backoff <= 1.0 {
-				return core.NewValidationError("retryPolicy.Backoff", step.RetryPolicy.Backoff,
-					fmt.Errorf("backoff must be greater than 1.0 for exponential growth"))
-			}
-		}
-
-		// Parse maxIntervalSec
-		if def.RetryPolicy.MaxIntervalSec > 0 {
-			step.RetryPolicy.MaxInterval = time.Second * time.Duration(def.RetryPolicy.MaxIntervalSec)
-		}
+		return parseRetryPolicy(def.RetryPolicy, &step.RetryPolicy)
 	}
 	return nil
+}
+
+// parseRetryPolicy parses a retryPolicyDef into a core.RetryPolicy. It is shared
+// by the step-level retryPolicy and the DAG-level default retryPolicy. Missing
+// fields are left untouched so callers can layer defaults on top.
+func parseRetryPolicy(def *retryPolicyDef, policy *core.RetryPolicy) error {
+	switch v := def.Limit.(type) {
+	case nil:
+		// limit not specified
+	case int:
+		policy.Limit = v
+	case int64:
+		policy.Limit = int(v)
+	case uint64:
+		policy.Limit = int(v)
+	case string:
+		policy.LimitStr = v
+	default:
+		return core.NewValidationError("retryPolicy.Limit", v, fmt.Errorf("invalid type: %T", v))
+	}
+
+	switch v := def.IntervalSec.(type) {
+	case nil:
+		// intervalSec not specified
+	case int:
+		policy.Interval = time.Second * time.Duration(v)
+	case int64:
+		policy.Interval = time.Second * time.Duration(v)
+	case uint64:
+		policy.Interval = time.Second * time.Duration(v)
+	case string:
+		policy.IntervalSecStr = v
+	default:
+		return core.NewValidationError("retryPolicy.IntervalSec", v, fmt.Errorf("invalid type: %T", v))
+	}
+
+	if def.ExitCode != nil {
+		policy.ExitCodes = def.ExitCode
+	}
+
+	// Parse backoff field
+	if def.Backoff != nil {
+		switch v := def.Backoff.(type) {
+		case bool:
+			if v {
+				policy.Backoff = 2.0 // Default multiplier when true
+			}
+		case int:
+			policy.Backoff = float64(v)
+		case int64:
+			policy.Backoff = float64(v)
+		case float64:
+			policy.Backoff = v
+		default:
+			return core.NewValidationError("retryPolicy.Backoff", v, fmt.Errorf("invalid type: %T", v))
+		}
+
+		// Validate backoff value
+		if policy.Backoff > 0 && policy.Backoff <= 1.0 {
+			return core.NewValidationError("retryPolicy.Backoff", policy.Backoff,
+				fmt.Errorf("backoff must be greater than 1.0 for exponential growth"))
+		}
+	}
+
+	// Parse maxIntervalSec
+	if def.MaxIntervalSec > 0 {
+		policy.MaxInterval = time.Second * time.Duration(def.MaxIntervalSec)
+	}
+	return nil
+}
+
+// buildDefaultRetryPolicy builds the DAG-level default retry policy that is
+// applied to steps without their own retryPolicy. The application to steps
+// happens after base config merging (see applyDefaultRetryPolicy).
+func buildDefaultRetryPolicy(_ BuildContext, spec *definition, dag *core.DAG) error {
+	if spec.RetryPolicy == nil {
+		return nil
+	}
+	// Explicit opt-out at the DAG level disables any inherited (e.g. base.yaml)
+	// default for all steps in this DAG.
+	if spec.RetryPolicy.Enabled != nil && !*spec.RetryPolicy.Enabled {
+		dag.RetryPolicy = &core.RetryPolicy{Disabled: true}
+		return nil
+	}
+	policy := &core.RetryPolicy{}
+	if err := parseRetryPolicy(spec.RetryPolicy, policy); err != nil {
+		return err
+	}
+	dag.RetryPolicy = policy
+	return nil
+}
+
+// applyDefaultRetryPolicy fills in the DAG-level default retry policy for every
+// step that does not define its own. It must be called after base config
+// merging so a default set in base.yaml reaches the actual DAG's steps.
+func applyDefaultRetryPolicy(dag *core.DAG) {
+	if dag == nil || dag.RetryPolicy == nil || dag.RetryPolicy.Disabled {
+		return
+	}
+	for i := range dag.Steps {
+		if isZeroRetryPolicy(dag.Steps[i].RetryPolicy) {
+			dag.Steps[i].RetryPolicy = cloneRetryPolicy(*dag.RetryPolicy)
+		}
+	}
+}
+
+// isZeroRetryPolicy reports whether a step has no retry policy configured. A
+// step that explicitly opted out (Disabled) is not considered zero so the
+// DAG-level default is not applied to it.
+func isZeroRetryPolicy(p core.RetryPolicy) bool {
+	return !p.Disabled && p.Limit == 0 && p.LimitStr == "" &&
+		p.Interval == 0 && p.IntervalSecStr == "" &&
+		len(p.ExitCodes) == 0 && p.Backoff == 0 && p.MaxInterval == 0
+}
+
+// cloneRetryPolicy returns a copy of the retry policy with an independent
+// ExitCodes slice to avoid sharing state between steps.
+func cloneRetryPolicy(p core.RetryPolicy) core.RetryPolicy {
+	if len(p.ExitCodes) > 0 {
+		ec := make([]int, len(p.ExitCodes))
+		copy(ec, p.ExitCodes)
+		p.ExitCodes = ec
+	}
+	return p
 }
 
 // buildRepeatPolicy sets up the repeat policy for a step.

@@ -135,6 +135,10 @@ type RetryPolicy struct {
 	Backoff float64 `json:"backoff,omitempty"`
 	// MaxInterval is the maximum interval cap for exponential backoff.
 	MaxInterval time.Duration `json:"maxInterval,omitempty"`
+	// Disabled indicates the step explicitly opted out of retries (via
+	// retryPolicy.enabled: false). It prevents a DAG-level default retry policy
+	// from being applied to this step.
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // RepeatMode is the type for the repeat mode.

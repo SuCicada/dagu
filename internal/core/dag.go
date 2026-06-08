@@ -78,6 +78,10 @@ type DAG struct {
 	Params []string `json:"params,omitempty"`
 	// Steps contains the list of steps in the DAG.
 	Steps []Step `json:"steps,omitempty"`
+	// RetryPolicy is the default retry policy applied to steps that do not
+	// define their own. It is typically set in base.yaml to provide a default
+	// retry behavior for all DAGs.
+	RetryPolicy *RetryPolicy `json:"retryPolicy,omitempty"`
 	// HandlerOn contains the steps to be executed on different events.
 	HandlerOn HandlerOn `json:"handlerOn,omitzero"`
 	// Preconditions contains the conditions to be met before running the DAG.
