@@ -106,6 +106,7 @@ func NewLogger(opts ...Option) Logger {
 	handlerOpts := &slog.HandlerOptions{
 		Level:     level,
 		AddSource: level == slog.LevelDebug,
+		//AddSource: true,
 	}
 
 	var (

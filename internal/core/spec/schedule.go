@@ -4,11 +4,7 @@ import (
 	"fmt"
 
 	"github.com/dagu-org/dagu/internal/core"
-	"github.com/robfig/cron/v3"
-)
-
-var cronParser = cron.NewParser(
-	cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow,
+	"github.com/dagu-org/dagu/internal/core/cronschedule"
 )
 
 // buildScheduler parses the schedule values and returns a list of schedules.
@@ -17,7 +13,7 @@ func buildScheduler(values []string) ([]core.Schedule, error) {
 	var ret []core.Schedule
 
 	for _, v := range values {
-		parsed, err := cronParser.Parse(v)
+		parsed, err := cronschedule.Parse(v)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s", ErrInvalidSchedule, err)
 		}
@@ -84,7 +80,7 @@ func parseScheduleMap(
 		}
 
 		for _, v := range values {
-			if _, err := cronParser.Parse(v); err != nil {
+			if _, err := cronschedule.Parse(v); err != nil {
 				return core.NewValidationError("schedule", v, fmt.Errorf("%w: %s", ErrInvalidSchedule, err))
 			}
 			*targets = append(*targets, v)

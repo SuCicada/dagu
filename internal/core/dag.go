@@ -15,6 +15,7 @@ import (
 	"github.com/dagu-org/dagu/internal/common/fileutil"
 	"github.com/dagu-org/dagu/internal/common/logger"
 	"github.com/dagu-org/dagu/internal/common/logger/tag"
+	"github.com/dagu-org/dagu/internal/core/cronschedule"
 	"github.com/joho/godotenv"
 	"github.com/robfig/cron/v3"
 )
@@ -462,7 +463,7 @@ func (s *Schedule) UnmarshalJSON(data []byte) error {
 
 	// Parse the cron expression to populate the Parsed field
 	if s.Expression != "" {
-		parsed, err := cron.ParseStandard(s.Expression)
+		parsed, err := cronschedule.Parse(s.Expression)
 		if err != nil {
 			return fmt.Errorf("invalid cron expression %q: %w", s.Expression, err)
 		}

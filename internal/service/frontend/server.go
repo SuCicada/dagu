@@ -152,21 +152,21 @@ func initBuiltinAuthService(cfg *config.Config) (*authservice.Service, error) {
 
 // Serve starts the HTTP server and configures routes
 func (srv *Server) Serve(ctx context.Context) error {
-	// Setup logger for HTTP requests
-	requestLogger := httplog.NewLogger("http", httplog.Options{
-		LogLevel:         slog.LevelDebug,
-		JSON:             srv.config.Core.LogFormat == "json",
-		Concise:          true,
-		RequestHeaders:   true,
-		MessageFieldName: "msg",
-		ResponseHeaders:  true,
-	})
-
 	// Create router with middleware
 	r := chi.NewMux()
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Compress(5))
-	r.Use(httplog.RequestLogger(requestLogger))
+	if srv.config.Server.AccessLog {
+		requestLogger := httplog.NewLogger("http", httplog.Options{
+			LogLevel:         slog.LevelDebug,
+			JSON:             srv.config.Core.LogFormat == "json",
+			Concise:          true,
+			RequestHeaders:   true,
+			MessageFieldName: "msg",
+			ResponseHeaders:  true,
+		})
+		r.Use(httplog.RequestLogger(requestLogger))
+	}
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"}, // TODO: Update to specific origins for better security

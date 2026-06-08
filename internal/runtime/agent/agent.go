@@ -558,7 +558,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	// Send the execution report if necessary.
 	a.lastErr = lastErr
 	if err := a.reporter.send(ctx, a.dag, finishedStatus, lastErr); err != nil {
-		logger.Error(ctx, "Mail notification failed", tag.Error(err))
+		logger.Error(ctx, "Notification failed", tag.Error(err))
 	}
 
 	// Mark the agent finished.

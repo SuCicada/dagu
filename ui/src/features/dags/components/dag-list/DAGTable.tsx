@@ -34,7 +34,7 @@ import LiveSwitch from '../common/LiveSwitch';
 
 // Helper to format milliseconds into d/h/m/s
 function formatMs(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
+  const seconds = Math.max(0, Math.floor(ms / 1000));
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -485,19 +485,20 @@ const defaultColumns = [
         // Display next run information
         let nextRunContent: React.ReactNode | null = null;
         if (!data.dag.suspended && schedules.length > 0) {
-          const nextRun = getNextSchedule(data.dag);
-          if (nextRun) {
-            nextRunContent = (
-              <div className="text-[10px] text-muted-foreground font-normal leading-tight">
-                <Ticker intervalMs={1000}>
-                  {() => {
-                    const ms = nextRun.getTime() - new Date().getTime();
-                    return <span>Run in {formatMs(ms)}</span>;
-                  }}
-                </Ticker>
-              </div>
-            );
-          }
+          nextRunContent = (
+            <div className="text-[10px] text-muted-foreground font-normal leading-tight">
+              <Ticker intervalMs={1000}>
+                {() => {
+                  const nextRun = getNextSchedule(data.dag);
+                  if (!nextRun) {
+                    return <span>Schedule unavailable</span>;
+                  }
+                  const ms = nextRun.getTime() - new Date().getTime();
+                  return <span>Run in {formatMs(ms)}</span>;
+                }}
+              </Ticker>
+            </div>
+          );
         } else if (data.dag.suspended) {
           nextRunContent = (
             <div className="text-[10px] text-muted-foreground font-normal leading-tight">

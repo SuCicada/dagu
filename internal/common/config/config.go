@@ -102,6 +102,9 @@ type Server struct {
 	// LatestStatusToday indicates whether the application should display only the most recent status for the current day.
 	LatestStatusToday bool
 
+	// AccessLog enables per-request HTTP access logs.
+	AccessLog bool
+
 	// TLS contains configuration details for enabling TLS/SSL encryption,
 	// such as certificate and key file paths.
 	TLS *TLSConfig

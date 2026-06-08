@@ -332,6 +332,9 @@ func (l *ConfigLoader) loadServerConfig(cfg *Config, def Definition) {
 	if def.LatestStatusToday != nil {
 		cfg.Server.LatestStatusToday = *def.LatestStatusToday
 	}
+	if def.AccessLog != nil {
+		cfg.Server.AccessLog = *def.AccessLog
+	}
 
 	// Set TLS configuration if available.
 	if def.TLS != nil {
@@ -849,6 +852,7 @@ var envBindings = []envBinding{
 	{key: "debug", env: "DEBUG"},
 	{key: "headless", env: "HEADLESS"},
 	{key: "latestStatusToday", env: "LATEST_STATUS_TODAY"},
+	{key: "accessLog", env: "ACCESS_LOG"},
 
 	// Core configurations
 	{key: "workDir", env: "WORK_DIR", isPath: true},

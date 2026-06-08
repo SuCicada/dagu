@@ -56,6 +56,9 @@ type Definition struct {
 	// LatestStatusToday indicates whether the application should display only the most recent status for the current day.
 	LatestStatusToday *bool `mapstructure:"latestStatusToday"`
 
+	// AccessLog enables per-request HTTP access logs.
+	AccessLog *bool `mapstructure:"accessLog"`
+
 	// TZ represents the timezone setting for the application (for example, "UTC" or "America/New_York").
 	TZ string `mapstructure:"tz"`
 

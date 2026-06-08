@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -90,9 +91,9 @@ func (er *entryReaderImpl) Init(ctx context.Context) error {
 
 	// Create and configure the file watcher
 	er.watcher = filenotify.New(time.Minute)
-	if err := er.watcher.Add(er.targetDir); err != nil {
+	if err := er.addWatchDirs(er.targetDir); err != nil {
 		_ = er.watcher.Close()
-		return fmt.Errorf("failed to watch DAG directory %s: %w", er.targetDir, err)
+		return fmt.Errorf("failed to watch DAG directories under %s: %w", er.targetDir, err)
 	}
 
 	return nil
@@ -112,33 +113,39 @@ func (er *entryReaderImpl) Start(ctx context.Context) {
 				return
 			}
 
+			// 为了子目录
+			if event.Op == fsnotify.Create {
+				if fi, err := os.Stat(event.Name); err == nil && fi.IsDir() {
+					if err := er.addWatchDirs(event.Name); err != nil {
+						logger.Error(ctx, "Failed to watch DAG directory",
+							tag.Dir(event.Name),
+							tag.Error(err))
+					}
+					continue
+				}
+			}
+
 			if !fileutil.IsYAMLFile(event.Name) {
 				continue
 			}
 
 			er.lock.Lock()
 			if event.Op == fsnotify.Create || event.Op == fsnotify.Write {
-				filePath := filepath.Join(er.targetDir, filepath.Base(event.Name))
-				dag, err := spec.Load(
-					ctx,
-					filePath,
-					spec.OnlyMetadata(),
-					spec.WithoutEval(),
-					spec.SkipSchemaValidation(),
-					spec.WithDAGsDir(er.targetDir),
-				)
+				dag, err := er.loadDAG(ctx, event.Name)
 				if err != nil {
 					logger.Error(ctx, "DAG load failed",
 						tag.Error(err),
 						tag.File(event.Name))
 				} else {
-					er.registry[filepath.Base(event.Name)] = dag
-					logger.Info(ctx, "DAG added/updated", tag.Name(filepath.Base(event.Name)))
+					key := er.registryKey(event.Name)
+					er.registry[key] = dag
+					logger.Info(ctx, "DAG added/updated", tag.Name(key))
 				}
 			}
 			if event.Op == fsnotify.Rename || event.Op == fsnotify.Remove {
-				delete(er.registry, filepath.Base(event.Name))
-				logger.Info(ctx, "DAG removed", tag.Name(filepath.Base(event.Name)))
+				key := er.registryKey(event.Name)
+				delete(er.registry, key)
+				logger.Info(ctx, "DAG removed", tag.Name(key))
 			}
 			er.lock.Unlock()
 
@@ -170,7 +177,10 @@ func (er *entryReaderImpl) Next(ctx context.Context, now time.Time) ([]*Schedule
 	var jobs []*ScheduledJob
 
 	for _, dag := range er.registry {
-		dagName := strings.TrimSuffix(filepath.Base(dag.Location), filepath.Ext(dag.Location))
+		dagName := dag.Name
+		if dagName == "" {
+			dagName = strings.TrimSuffix(filepath.Base(dag.Location), filepath.Ext(dag.Location))
+		}
 		if er.dagStore.IsSuspended(ctx, dagName) {
 			logger.Debug(ctx, "Skipping suspended DAG", tag.DAG(dagName))
 			continue
@@ -210,37 +220,68 @@ func (er *entryReaderImpl) createJob(dag *core.DAG, next time.Time, schedule cro
 func (er *entryReaderImpl) initialize(ctx context.Context) error {
 	// Note: This method expects the caller to already hold er.lock
 	logger.Info(ctx, "Loading DAGs", tag.Dir(er.targetDir))
-	fis, err := os.ReadDir(er.targetDir)
-	if err != nil {
-		logger.Error(ctx, "Failed to read DAG directory",
+	var dags []string
+	if err := filepath.WalkDir(er.targetDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			logger.Error(ctx, "Failed to read DAG path",
+				tag.File(path),
+				tag.Error(err),
+			)
+			return nil
+		}
+		if d.IsDir() || !fileutil.IsYAMLFile(path) {
+			return nil
+		}
+		dag, err := er.loadDAG(ctx, path)
+		key := er.registryKey(path)
+		if err != nil {
+			logger.Error(ctx, "DAG load failed",
+				tag.Error(err),
+				tag.Name(key))
+			return nil
+		}
+		er.registry[key] = dag
+		dags = append(dags, key)
+		return nil
+	}); err != nil {
+		logger.Error(ctx, "Failed to walk DAG directory",
 			tag.Dir(er.targetDir),
 			tag.Error(err),
 		)
 		return err
 	}
 
-	var dags []string
-	for _, fi := range fis {
-		if fileutil.IsYAMLFile(fi.Name()) {
-			dag, err := spec.Load(
-				ctx,
-				filepath.Join(er.targetDir, fi.Name()),
-				spec.OnlyMetadata(),
-				spec.WithoutEval(),
-				spec.SkipSchemaValidation(),
-				spec.WithDAGsDir(er.targetDir),
-			)
-			if err != nil {
-				logger.Error(ctx, "DAG load failed",
-					tag.Error(err),
-					tag.Name(fi.Name()))
-				continue
-			}
-			er.registry[fi.Name()] = dag
-			dags = append(dags, fi.Name())
-		}
-	}
-
 	logger.Info(ctx, "DAGs loaded", slog.String("dags", strings.Join(dags, ",")))
 	return nil
+}
+
+func (er *entryReaderImpl) loadDAG(ctx context.Context, filePath string) (*core.DAG, error) {
+	return spec.Load(
+		ctx,
+		filepath.Clean(filePath),
+		spec.OnlyMetadata(),
+		spec.WithoutEval(),
+		spec.SkipSchemaValidation(),
+		spec.WithDAGsDir(er.targetDir),
+	)
+}
+
+func (er *entryReaderImpl) registryKey(filePath string) string {
+	rel, err := filepath.Rel(er.targetDir, filepath.Clean(filePath))
+	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		return filepath.Base(filePath)
+	}
+	return filepath.ToSlash(rel)
+}
+
+func (er *entryReaderImpl) addWatchDirs(root string) error {
+	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		return er.watcher.Add(path)
+	})
 }
