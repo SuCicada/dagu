@@ -321,6 +321,7 @@ func TestRenderHTMLComprehensive(t *testing.T) {
 
 	// Call renderHTML to get the output
 	html := renderHTML(nodes)
+	fmt.Println(html)
 
 	// Verify HTML structure and content
 	t.Run("HTMLStructure", func(t *testing.T) {

@@ -15,6 +15,7 @@ import (
 	"github.com/dagu-org/dagu/internal/core"
 	"github.com/dagu-org/dagu/internal/core/execution"
 	"github.com/dagu-org/dagu/internal/core/spec"
+	"github.com/dagu-org/dagu/internal/persistence/filedag"
 	runtime1 "github.com/dagu-org/dagu/internal/runtime"
 )
 
@@ -945,15 +946,6 @@ func (a *API) StopAllDAGRuns(ctx context.Context, request api.StopAllDAGRunsRequ
 	}, nil
 }
 
-type dagFileIDProvider interface {
-	FileID(*core.DAG) string
-}
-
 func dagFileID(store execution.DAGStore, dag *core.DAG) string {
-	if provider, ok := store.(dagFileIDProvider); ok {
-		if id := provider.FileID(dag); id != "" {
-			return id
-		}
-	}
-	return dag.FileName()
+	return filedag.DAGFileID(store, dag)
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/dagu-org/dagu/internal/core"
 	"github.com/dagu-org/dagu/internal/core/execution"
 	"github.com/dagu-org/dagu/internal/core/spec"
+	"github.com/dagu-org/dagu/internal/persistence/filedag"
 	"github.com/dagu-org/dagu/internal/runtime"
 	"github.com/dagu-org/dagu/internal/service/scheduler/filenotify"
 	"github.com/robfig/cron/v3"
@@ -177,12 +178,15 @@ func (er *entryReaderImpl) Next(ctx context.Context, now time.Time) ([]*Schedule
 	var jobs []*ScheduledJob
 
 	for _, dag := range er.registry {
-		dagName := dag.Name
-		if dagName == "" {
-			dagName = strings.TrimSuffix(filepath.Base(dag.Location), filepath.Ext(dag.Location))
+		dagId := filedag.DAGFileID(er.dagStore, dag)
+		if dagId == "" {
+			dagId = dag.Name
+			if dagId == "" {
+				dagId = strings.TrimSuffix(filepath.Base(dag.Location), filepath.Ext(dag.Location))
+			}
 		}
-		if er.dagStore.IsSuspended(ctx, dagName) {
-			logger.Debug(ctx, "Skipping suspended DAG", tag.DAG(dagName))
+		if er.dagStore.IsSuspended(ctx, dagId) {
+			logger.Debug(ctx, "Skipping suspended DAG", tag.DAG(dagId))
 			continue
 		}
 
