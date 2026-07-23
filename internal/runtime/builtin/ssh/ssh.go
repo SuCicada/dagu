@@ -1,3 +1,7 @@
+// Package ssh provides the legacy SSH executor.
+//
+// Deprecated: use the ssh2 executor instead. The ssh executor remains available
+// for backward compatibility but will emit build warnings when used.
 package ssh
 
 import (
@@ -9,6 +13,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"github.com/dagu-org/dagu/internal/common/logger"
 	"github.com/dagu-org/dagu/internal/core"
 	"github.com/dagu-org/dagu/internal/runtime/executor"
 )
@@ -39,7 +44,12 @@ type sshExecutor struct {
 	session *ssh.Session
 }
 
+// NewSSHExecutor creates a legacy SSH executor.
+//
+// Deprecated: use the ssh2 executor instead.
 func NewSSHExecutor(ctx context.Context, step core.Step) (executor.Executor, error) {
+	logger.Warn(ctx, "executor type 'ssh' is deprecated, use 'ssh2' instead")
+
 	var client *Client
 
 	// Prefer step-level SSH configuration if present

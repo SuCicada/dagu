@@ -3170,6 +3170,8 @@ steps:
 		assert.Equal(t, "example.com", dag.SSH.Host)
 		assert.Equal(t, "2222", dag.SSH.Port)
 		assert.Equal(t, "~/.ssh/id_rsa", dag.SSH.Key)
+		require.NotEmpty(t, dag.BuildWarnings)
+		assert.Contains(t, dag.BuildWarnings[0], "deprecated")
 	})
 
 	t.Run("SSHConfigWithStrictHostKey", func(t *testing.T) {
@@ -3544,6 +3546,7 @@ steps:
 		require.NoError(t, err)
 		require.NotNil(t, dag)
 		assert.Equal(t, tempDir, dag.WorkingDir)
+		assert.Equal(t, tempDir, dag.ExplicitWorkingDir)
 	})
 
 	t.Run("WorkingDirWithEnvVarExpansion", func(t *testing.T) {
@@ -3558,6 +3561,7 @@ steps:
 		require.NoError(t, err)
 		require.NotNil(t, dag)
 		assert.Equal(t, filepath.Join(tempDir, "subdir"), dag.WorkingDir)
+		assert.Equal(t, filepath.Join(tempDir, "subdir"), dag.ExplicitWorkingDir)
 	})
 
 	t.Run("DefaultWorkingDirWhenNoFile", func(t *testing.T) {
@@ -3573,6 +3577,7 @@ steps:
 		expectedDir, err := os.Getwd()
 		require.NoError(t, err)
 		assert.Equal(t, expectedDir, dag.WorkingDir)
+		assert.Empty(t, dag.ExplicitWorkingDir, "defaulted workingDir must not set ExplicitWorkingDir")
 	})
 
 	t.Run("RelativeWorkingDirResolvesAgainstDAGFile", func(t *testing.T) {
@@ -3594,6 +3599,8 @@ steps:
 
 		// Relative path should resolve against DAG file directory
 		assert.Equal(t, subDir, dag.WorkingDir)
+		// ExplicitWorkingDir keeps the pre-resolution value for remote executors
+		assert.Equal(t, "./scripts", dag.ExplicitWorkingDir)
 	})
 
 	t.Run("RelativeWorkingDirWithoutDAGFile_ResolvesAgainstCWD", func(t *testing.T) {
@@ -3612,6 +3619,7 @@ steps:
 		require.NoError(t, err)
 		expectedDir := filepath.Join(cwd, "subdir")
 		assert.Equal(t, expectedDir, dag.WorkingDir)
+		assert.Equal(t, "./subdir", dag.ExplicitWorkingDir)
 	})
 }
 

@@ -34,7 +34,7 @@
     },
     "workingDir": {
       "type": "string",
-      "description": "Working directory for the DAG. All relative paths (including dotenv files) are resolved relative to this directory. Defaults to the directory containing the DAG file."
+      "description": "Working directory for the DAG. All relative paths (including dotenv files) are resolved relative to this directory. Defaults to the directory containing the DAG file. When explicitly set, ssh2 steps without their own workingDir also use this value as the remote working directory."
     },
     "schedule": {
       "oneOf": [
@@ -237,6 +237,50 @@
       },
       "description": "Configuration for sending email notifications on DAG success or failure."
     },
+    "notifyOn": {
+      "type": "object",
+      "properties": {
+        "failure": {
+          "type": "boolean",
+          "description": "Send non-email notification when DAG fails"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Send non-email notification when DAG succeeds"
+        }
+      },
+      "description": "Configuration for sending non-email notifications such as Apprise on DAG success or failure. If omitted while apprise is configured, failure notifications are sent by default."
+    },
+    "apprise": {
+      "type": "object",
+      "properties": {
+        "urls": {
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Single Apprise notification URL passed to the apprise CLI"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of Apprise notification URLs passed to the apprise CLI"
+            }
+          ],
+          "description": "Apprise notification URL(s). Requires the apprise CLI to be installed in the runtime image."
+        },
+        "apiURL": {
+          "type": "string",
+          "description": "Apprise API endpoint or base URL. If key is set, Dagu posts to apiURL + /notify/{key}; otherwise it posts directly to apiURL."
+        },
+        "key": {
+          "type": "string",
+          "description": "Apprise API persistent storage key."
+        }
+      },
+      "description": "Apprise notification configuration. Configure either urls for CLI delivery or apiURL/key for Apprise API delivery."
+    },
     "errorMail": {
       "$ref": "#/definitions/mailConfig",
       "description": "Email configuration specifically for error notifications."
@@ -310,6 +354,62 @@
         }
       ],
       "description": "Alternative name for precondition. Works exactly the same way."
+    },
+    "retryPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Set to false to disable the default retry policy for all steps in this DAG (e.g. to opt out of a default set in base.yaml)."
+        },
+        "limit": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Maximum number of retry attempts"
+        },
+        "intervalSec": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Seconds to wait between retry attempts"
+        },
+        "backoff": {
+          "oneOf": [
+            {
+              "type": "boolean",
+              "description": "When true, uses default multiplier of 2.0"
+            },
+            {
+              "type": "number",
+              "description": "Custom exponential backoff multiplier"
+            }
+          ],
+          "description": "Exponential backoff multiplier for retry delays"
+        },
+        "maxIntervalSec": {
+          "type": "integer",
+          "description": "Maximum interval in seconds (caps exponential growth)"
+        },
+        "exitCode": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "List of exit codes that should trigger a retry. If not specified, all non-zero exit codes will trigger a retry."
+        }
+      },
+      "description": "Default retry policy applied to every step that does not define its own retryPolicy. Set this in base.yaml to give all DAGs a default retry behavior. Steps can opt out with 'retryPolicy: { enabled: false }'."
     },
     "params": {
       "oneOf": [
@@ -403,7 +503,8 @@
     },
     "ssh": {
       "$ref": "#/definitions/sshConfig",
-      "description": "Default SSH configuration for all steps in the DAG. Steps can override this configuration with their own SSH settings. Note: SSH and container configurations are mutually exclusive at the DAG level."
+      "deprecated": true,
+      "description": "Deprecated: use step executor type 'ssh2' instead. Default SSH configuration for all steps in the DAG. Steps can override this configuration with their own SSH settings. Note: SSH and container configurations are mutually exclusive at the DAG level."
     },
     "steps": {
       "oneOf": [
@@ -544,7 +645,7 @@
         },
         "workingDir": {
           "type": "string",
-          "description": "Working directory for the step. Inherits from DAG's workingDir if not specified. Overrides DAG-level workingDir for this step."
+          "description": "Working directory for the step. Inherits from DAG's workingDir if not specified. Overrides DAG-level workingDir for this step. For ssh2: step workingDir takes precedence; otherwise an explicitly set DAG workingDir is used as the remote directory (defaulted DAG file-dir workingDir is not applied remotely). Remote command runs as `cd <workingDir> && <command>`."
         },
         "executor": {
           "oneOf": [
@@ -564,6 +665,7 @@
                     "http",
                     "mail",
                     "ssh",
+                    "ssh2",
                     "jq",
                     "gha",
                     "github_action",
@@ -573,7 +675,7 @@
                     "parallel",
                     "archive"
                   ],
-                  "description": "Type of executor to use for this step. 'command' is the default shell command executor. 'dag' is for sub-DAG execution. 'parallel' is for parallel step execution."
+                  "description": "Type of executor to use for this step. 'command' is the default shell command executor. 'ssh2' runs commands over the system ssh client. 'ssh' is deprecated in favor of 'ssh2'. 'dag' is for sub-DAG execution. 'parallel' is for parallel step execution."
                 },
                 "config": {
                   "type": "object",
@@ -722,6 +824,10 @@
         "retryPolicy": {
           "type": "object",
           "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable or disable this retry policy. If omitted, retry is enabled when retryPolicy is configured."
+            },
             "limit": {
               "oneOf": [
                 {
@@ -1252,6 +1358,7 @@
     },
     "sshConfig": {
       "type": "object",
+      "deprecated": true,
       "additionalProperties": false,
       "properties": {
         "user": {

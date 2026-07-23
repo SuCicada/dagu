@@ -36,6 +36,11 @@ type DAG struct {
 	// Default value is the directory of DAG file.
 	// If the source is not a DAG file, current directory when it's created.
 	WorkingDir string `json:"workingDir,omitempty"`
+	// ExplicitWorkingDir is the DAG-level workingDir as specified in YAML after
+	// env expansion, before local path resolution. Empty when workingDir was
+	// defaulted from the DAG file directory or process cwd. Remote executors
+	// (e.g. ssh2) use this so they do not inherit local default paths.
+	ExplicitWorkingDir string `json:"explicitWorkingDir,omitempty"`
 	// Location is the absolute path to the DAG file.
 	// It is used to generate unix socket name and can be blank
 	Location string `json:"location,omitempty"`
@@ -134,6 +139,7 @@ type DAG struct {
 	// Optional: If not specified, falls back to DOCKER_AUTH_CONFIG or docker config.
 	RegistryAuths map[string]*AuthConfig `json:"registryAuths,omitempty"`
 	// SSH contains the default SSH configuration for the DAG.
+	// Deprecated: use step executor type ssh2 instead.
 	SSH *SSHConfig `json:"ssh,omitempty"`
 	// Secrets contains references to external secrets to be resolved at runtime.
 	Secrets []SecretRef `json:"secrets,omitempty"`

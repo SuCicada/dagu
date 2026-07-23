@@ -692,9 +692,14 @@ func buildShell(ctx BuildContext, spec *definition, dag *core.DAG) error {
 func buildWorkingDir(ctx BuildContext, spec *definition, dag *core.DAG) error {
 	switch {
 	case spec.WorkingDir != "":
-		wd := spec.WorkingDir
+		wd := strings.TrimSpace(spec.WorkingDir)
 		if !ctx.opts.Has(BuildFlagNoEval) {
 			wd = os.ExpandEnv(wd)
+		}
+		// Preserve the user-specified value (env-expanded) for remote executors
+		// before resolving against the local filesystem.
+		dag.ExplicitWorkingDir = wd
+		if !ctx.opts.Has(BuildFlagNoEval) {
 			switch {
 			case filepath.IsAbs(wd) || strings.HasPrefix(wd, "~"):
 				wd = fileutil.ResolvePathOrBlank(wd)
@@ -963,11 +968,21 @@ func buildRunConfig(_ BuildContext, spec *definition, dag *core.DAG) error {
 	return nil
 }
 
+const (
+	deprecatedSSHExecutorMsg = "executor type 'ssh' is deprecated, use 'ssh2' instead"
+	deprecatedSSHFieldMsg    = "DAG field 'ssh' is deprecated; configure steps with executor type 'ssh2' instead"
+)
+
 // buildSSH builds the SSH configuration for the DAG.
-func buildSSH(_ BuildContext, spec *definition, dag *core.DAG) error {
+func buildSSH(ctx BuildContext, spec *definition, dag *core.DAG) error {
 	if spec.SSH == nil {
 		return nil
 	}
+
+	if ctx.ctx != nil {
+		logger.Warn(ctx.ctx, deprecatedSSHFieldMsg)
+	}
+	dag.BuildWarnings = append(dag.BuildWarnings, deprecatedSSHFieldMsg)
 
 	// Parse port - can be string or number
 	port := ""
@@ -1921,7 +1936,20 @@ func buildExecutor(ctx StepBuildContext, def stepDef, step *core.Step) error {
 
 	}
 
+	warnDeprecatedSSHExecutor(ctx, step.ExecutorConfig.Type)
 	return nil
+}
+
+func warnDeprecatedSSHExecutor(ctx StepBuildContext, executorType string) {
+	if executorType != "ssh" {
+		return
+	}
+	if ctx.ctx != nil {
+		logger.Warn(ctx.ctx, deprecatedSSHExecutorMsg)
+	}
+	if ctx.dag != nil {
+		ctx.dag.BuildWarnings = append(ctx.dag.BuildWarnings, deprecatedSSHExecutorMsg)
+	}
 }
 
 func translateExecutorConfig(ctx StepBuildContext, def stepDef, step *core.Step) error {

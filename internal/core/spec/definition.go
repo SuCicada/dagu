@@ -89,6 +89,7 @@ type definition struct {
 	// Can be either a JSON string or a map of registry to auth config.
 	RegistryAuths any
 	// SSH is the default SSH configuration for the DAG.
+	// Deprecated: use step executor type ssh2 instead.
 	SSH *sshDef
 	// Secrets contains references to external secrets.
 	Secrets []secretRefDef

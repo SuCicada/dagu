@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/dagu-org/dagu/internal/core"
+	"github.com/dagu-org/dagu/internal/runtime"
 	"github.com/dagu-org/dagu/internal/runtime/executor"
 	"github.com/go-viper/mapstructure/v2"
 )
@@ -63,11 +64,43 @@ func (e *mysshExec) Kill(sig os.Signal) error {
 }
 
 func (e *mysshExec) Run(ctx context.Context) error {
-	command := strings.Join(append([]string{e.step.Command}, e.step.Args...), " ")
+	command := buildRemoteCommand(resolveRemoteWorkingDir(ctx, e.step), e.step.Command, e.step.Args)
 	e.cmd = exec.CommandContext(ctx, "ssh", e.host, command)
 	e.cmd.Stdout = e.stdout
 	e.cmd.Stderr = e.stderr
 	return e.cmd.Run()
+}
+
+// resolveRemoteWorkingDir returns the remote working directory for ssh2.
+// Precedence: step workingDir (Dir) > DAG ExplicitWorkingDir.
+// Defaulted DAG WorkingDir (from file path / cwd) is never used for remote.
+func resolveRemoteWorkingDir(ctx context.Context, step core.Step) string {
+	if dir := strings.TrimSpace(step.Dir); dir != "" {
+		return dir
+	}
+	if dag := runtime.GetDAGContext(ctx).DAG; dag != nil {
+		return strings.TrimSpace(dag.ExplicitWorkingDir)
+	}
+	return ""
+}
+
+// buildRemoteCommand joins command/args and, when workdir is set,
+// prefixes `cd <quoted> &&` so the remote shell runs in that directory.
+func buildRemoteCommand(workdir, command string, args []string) string {
+	remoteCmd := strings.Join(append([]string{command}, args...), " ")
+	workdir = strings.TrimSpace(workdir)
+	if workdir == "" {
+		return remoteCmd
+	}
+
+	// Expand env vars only; do not resolve against the local filesystem.
+	workdir = os.ExpandEnv(workdir)
+	return "cd " + quoteShellArg(workdir) + " && " + remoteCmd
+}
+
+// quoteShellArg wraps s in single quotes for a POSIX remote shell.
+func quoteShellArg(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func init() {
