@@ -53,3 +53,7 @@ deploy/
 /data
 .local
 .agents/
+
+*.exe
+assets/images/
+
