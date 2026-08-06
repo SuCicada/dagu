@@ -16,6 +16,11 @@ type Props = {
     startTimestamp: number;
     endTimestamp?: number;
   };
+  /**
+   * Called whenever the user pans or zooms the timeline (not for programmatic
+   * window changes), so the caller can load data for the newly visible range.
+   */
+  onVisibleRangeChange?: (start: Date, end: Date) => void;
 };
 
 type TimelineItem = {
@@ -27,9 +32,15 @@ type TimelineItem = {
   className: string;
 };
 
-function DashboardTimeChart({ data: input, selectedDate }: Props) {
+function DashboardTimeChart({
+  data: input,
+  selectedDate,
+  onVisibleRangeChange,
+}: Props) {
   const timelineRef = useRef<HTMLDivElement>(null);
   const timelineInstance = useRef<Timeline | null>(null);
+  const datasetRef = useRef<DataSet<TimelineItem> | null>(null);
+  const initialViewRef = useRef<{ start: Date; end: Date } | null>(null);
   const config = useConfig();
   const [selectedDAGRun, setSelectedDAGRun] = useState<{
     name: string;
@@ -216,32 +227,12 @@ function DashboardTimeChart({ data: input, selectedDate }: Props) {
     }
   }, []);
 
-  useEffect(() => {
-    if (!timelineRef.current) return;
-
+  // Timeline items derived from the current data. Kept separate from the
+  // timeline instance so refreshing data never recreates or repositions it.
+  const items = React.useMemo(() => {
     const validTimezone = getValidTimezone(config.tz);
-    const items: TimelineItem[] = [];
     const now = dayjs();
-
-    const viewStartDate = selectedDate
-      ? dayjs.unix(selectedDate.startTimestamp)
-      : dayjs().startOf('day');
-
-    const viewEndDate = selectedDate?.endTimestamp
-      ? dayjs.unix(selectedDate.endTimestamp)
-      : now.endOf('day');
-
-    if (!timelineInstance.current) {
-      initialViewRef.current = {
-        start: !isNaN(viewStartDate.toDate().getTime())
-          ? viewStartDate.toDate()
-          : dayjs().startOf('day').toDate(),
-        end: !isNaN(viewEndDate.toDate().getTime())
-          ? viewEndDate.toDate()
-          : dayjs().endOf('day').toDate(),
-      };
-    }
-
+    const result: TimelineItem[] = [];
     const seenIds = new Set<string>();
 
     input.forEach((dagRun) => {
@@ -263,7 +254,7 @@ function DashboardTimeChart({ data: input, selectedDate }: Props) {
           !isNaN(endDate.getTime()) &&
           startDate <= endDate
         ) {
-          items.push({
+          result.push({
             id,
             content: dagRun.name,
             start: startDate,
@@ -275,74 +266,120 @@ function DashboardTimeChart({ data: input, selectedDate }: Props) {
       }
     });
 
-    const dataset = new DataSet(items);
+    return result;
+  }, [input, config.tz, getValidTimezone]);
 
-    const validViewStartDate = !isNaN(viewStartDate.toDate().getTime())
-      ? viewStartDate.toDate()
+  // The window the timeline should show for the currently selected date.
+  const viewWindow = React.useMemo(() => {
+    const startDate = selectedDate
+      ? dayjs.unix(selectedDate.startTimestamp).toDate()
       : dayjs().startOf('day').toDate();
-    const validViewEndDate = !isNaN(viewEndDate.toDate().getTime())
-      ? viewEndDate.toDate()
+    const endDate = selectedDate?.endTimestamp
+      ? dayjs.unix(selectedDate.endTimestamp).toDate()
       : dayjs().endOf('day').toDate();
 
-    if (!timelineInstance.current) {
-      timelineInstance.current = new Timeline(timelineRef.current, dataset, {
-        start: validViewStartDate,
-        end: validViewEndDate,
-        orientation: 'top',
-        stack: true,
-        showMajorLabels: true,
-        showMinorLabels: true,
-        showTooltips: true,
-        zoomable: true,
-        verticalScroll: true,
-        zoomKey: 'ctrlKey',
-        timeAxis: { scale: 'hour', step: 1 },
-        format: {
-          minorLabels: {
-            minute: 'HH:mm',
-            hour: 'HH:mm',
-          },
-          majorLabels: {
-            hour: 'ddd D MMM',
-            day: 'ddd D MMM',
-          },
-        },
-        height: '100%',
-        maxHeight: '100%',
-        margin: {
-          item: { vertical: 4, horizontal: 2 },
-          axis: 2,
-        },
-      });
+    return {
+      start: !isNaN(startDate.getTime())
+        ? startDate
+        : dayjs().startOf('day').toDate(),
+      end: !isNaN(endDate.getTime()) ? endDate : dayjs().endOf('day').toDate(),
+    };
+  }, [selectedDate?.startTimestamp, selectedDate?.endTimestamp]);
 
-      // Add range change listener for dynamic time axis
-      timelineInstance.current.on('rangechanged', () => {
-        if (timelineInstance.current) {
-          updateTimeAxisBasedOnZoom(timelineInstance.current);
-        }
-      });
+  // Latest values for use inside the mount-only effect below.
+  const viewWindowRef = useRef(viewWindow);
+  viewWindowRef.current = viewWindow;
+  const onVisibleRangeChangeRef = useRef(onVisibleRangeChange);
+  onVisibleRangeChangeRef.current = onVisibleRangeChange;
 
-      // Initial update based on current view
-      updateTimeAxisBasedOnZoom(timelineInstance.current);
-    } else {
-      timelineInstance.current.setItems(dataset);
-      timelineInstance.current.setWindow(validViewStartDate, validViewEndDate);
-    }
+  // Create the timeline once. Recreating it on every data refresh would reset
+  // the user's pan/zoom position.
+  useEffect(() => {
+    if (!timelineRef.current) return;
+
+    const dataset = new DataSet<TimelineItem>([]);
+    datasetRef.current = dataset;
+
+    const { start, end } = viewWindowRef.current;
+    initialViewRef.current = { start, end };
+
+    const timeline = new Timeline(timelineRef.current, dataset, {
+      start,
+      end,
+      orientation: 'top',
+      stack: true,
+      showMajorLabels: true,
+      showMinorLabels: true,
+      showTooltips: true,
+      zoomable: true,
+      verticalScroll: true,
+      // Enables two-finger horizontal swipe (and shift+wheel) to pan the
+      // timeline. Vertical wheel still scrolls the stacked items, since
+      // vis-timeline only routes a wheel event here when |deltaX| > |deltaY|.
+      horizontalScroll: true,
+      zoomKey: 'ctrlKey',
+      timeAxis: { scale: 'hour', step: 1 },
+      format: {
+        minorLabels: {
+          minute: 'HH:mm',
+          hour: 'HH:mm',
+        },
+        majorLabels: {
+          hour: 'ddd D MMM',
+          day: 'ddd D MMM',
+        },
+      },
+      height: '100%',
+      maxHeight: '100%',
+      margin: {
+        item: { vertical: 4, horizontal: 2 },
+        axis: 2,
+      },
+    });
+    timelineInstance.current = timeline;
+
+    // Add range change listener for dynamic time axis
+    timeline.on('rangechanged', (properties) => {
+      updateTimeAxisBasedOnZoom(timeline);
+      if (properties?.byUser) {
+        onVisibleRangeChangeRef.current?.(properties.start, properties.end);
+      }
+    });
+
+    // Initial update based on current view
+    updateTimeAxisBasedOnZoom(timeline);
 
     return () => {
-      if (timelineInstance.current) {
-        timelineInstance.current.off('rangechanged');
-        timelineInstance.current.destroy();
-        timelineInstance.current = null;
-      }
+      timeline.off('rangechanged');
+      timeline.destroy();
+      timelineInstance.current = null;
+      datasetRef.current = null;
     };
-  }, [
-    input,
-    config.tz,
-    getValidTimezone,
-    selectedDate,
-    updateTimeAxisBasedOnZoom,
-  ]);
+  }, [updateTimeAxisBasedOnZoom]);
+
+  // Sync items into the existing dataset without touching the window.
+  useEffect(() => {
+    const dataset = datasetRef.current;
+    if (!dataset) return;
+
+    const nextIds = new Set(items.map((item) => item.id));
+    const staleIds = (dataset.getIds() as string[]).filter(
+      (id) => !nextIds.has(id)
+    );
+    if (staleIds.length > 0) {
+      dataset.remove(staleIds);
+    }
+    dataset.update(items);
+  }, [items]);
+
+  // Move the window only when the selected date actually changes.
+  useEffect(() => {
+    const timeline = timelineInstance.current;
+    if (!timeline) return;
+
+    initialViewRef.current = viewWindow;
+    timeline.setWindow(viewWindow.start, viewWindow.end, { animation: false });
+  }, [viewWindow]);
 
   useEffect(() => {
     const timeline = timelineInstance.current;
@@ -378,8 +415,6 @@ function DashboardTimeChart({ data: input, selectedDate }: Props) {
   const handleCloseModal = () => {
     setIsModalOpen(false);
   };
-
-  const initialViewRef = useRef<{ start: Date; end: Date } | null>(null);
 
   const handleZoomIn = () => {
     if (timelineInstance.current) {
