@@ -241,7 +241,7 @@ export const mainListItems = React.forwardRef<
       {/* GitHub link */}
       <div className="px-2 pb-6 md:pb-1">
         <a
-          href="https://github.com/dagu-org/dagu"
+          href="https://github.com/SuCicada/dagu"
           target="_blank"
           rel="noopener noreferrer"
           className={cn(
