@@ -30,6 +30,7 @@ import { useQuery } from '../hooks/api';
 import type { components } from '../api/v2/schema'; // Import the main components interface
 import { Status } from '../api/v2/schema'; // Import the Status enum
 import dayjs from '../lib/dayjs';
+import { getUpcomingRuns } from '../lib/schedule';
 
 // Define types using the imported components structure
 type DAGRunSummary = components['schemas']['DAGRunSummary'];
@@ -40,6 +41,11 @@ type Metrics = Record<Status, number>;
 // panning before fetching, and how much history to keep loaded at once.
 const RANGE_CHANGE_DEBOUNCE_MS = 300;
 const MAX_LOADED_SPAN_DAYS = 31;
+
+// How far ahead the timeline projects scheduled runs, and how often that
+// projection rolls forward.
+const UPCOMING_WINDOW_HOURS = 24;
+const UPCOMING_REFRESH_MS = 60000;
 
 // Initialize metrics count for relevant statuses
 const initializeMetrics = (): Metrics => {
@@ -284,6 +290,39 @@ function Dashboard(): React.ReactElement | null {
     // Keep showing the current runs while a widened range is being fetched
     keepPreviousData: true,
   });
+
+  // Upcoming scheduled runs. The DAG list carries each DAG's cron expressions
+  // and suspended flag, which is everything needed to project the next runs.
+  const { data: dagsData } = useQuery('/dags', {
+    params: {
+      query: {
+        remoteNode: appBarContext.selectedRemoteNode || 'local',
+        perPage: 1000,
+      },
+    },
+    refreshInterval: 60000,
+    keepPreviousData: true,
+  });
+
+  // Recomputed on a coarse tick so markers roll forward without re-rendering
+  // the timeline on every dag-run poll.
+  const [scheduleEpoch, setScheduleEpoch] = React.useState(0);
+  React.useEffect(() => {
+    const id = setInterval(
+      () => setScheduleEpoch((n) => n + 1),
+      UPCOMING_REFRESH_MS
+    );
+    return () => clearInterval(id);
+  }, []);
+
+  const upcomingRuns = React.useMemo(() => {
+    const dagFiles = dagsData?.dags || [];
+    if (dagFiles.length === 0) return [];
+    const from = new Date();
+    const to = new Date(from.getTime() + UPCOMING_WINDOW_HOURS * 3600 * 1000);
+    return getUpcomingRuns(dagFiles, from, to, config.tz || undefined);
+    // scheduleEpoch is not read above - it exists to roll the window forward
+  }, [dagsData, config.tz, scheduleEpoch]);
 
   // Extract unique dagRun names for the select dropdown - must be before conditional returns
   const dagRunsList: DAGRunSummary[] = React.useMemo(
@@ -561,6 +600,7 @@ function Dashboard(): React.ReactElement | null {
               endTimestamp: dateRange.endDate,
             }}
             onVisibleRangeChange={handleVisibleRangeChange}
+            upcomingRuns={upcomingRuns}
           />
         </div>
       </div>

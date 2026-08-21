@@ -6,6 +6,7 @@ import { components } from '../../../api/v2/schema';
 import { statusColorMapping } from '../../../consts';
 import { useConfig } from '../../../contexts/ConfigContext';
 import dayjs from '../../../lib/dayjs';
+import type { UpcomingRun } from '../../../lib/schedule';
 import DAGRunDetailsModal from '../../dag-runs/components/dag-run-details/DAGRunDetailsModal';
 import { Button } from '@/components/ui/button';
 import { ZoomIn, ZoomOut, Maximize, Clock, RotateCcw } from 'lucide-react';
@@ -21,21 +22,26 @@ type Props = {
    * window changes), so the caller can load data for the newly visible range.
    */
   onVisibleRangeChange?: (start: Date, end: Date) => void;
+  /** Runs the scheduler is expected to start, drawn as blue markers. */
+  upcomingRuns?: UpcomingRun[];
 };
 
 type TimelineItem = {
   id: string;
   content: string;
   start: Date;
-  end: Date;
+  end?: Date;
   group: string;
   className: string;
+  type?: 'box' | 'point' | 'range' | 'background';
+  title?: string;
 };
 
 function DashboardTimeChart({
   data: input,
   selectedDate,
   onVisibleRangeChange,
+  upcomingRuns,
 }: Props) {
   const timelineRef = useRef<HTMLDivElement>(null);
   const timelineInstance = useRef<Timeline | null>(null);
@@ -266,8 +272,27 @@ function DashboardTimeChart({
       }
     });
 
+    // Scheduled-but-not-yet-started runs, drawn as point markers so they read
+    // as an instant rather than a duration we do not know yet.
+    (upcomingRuns ?? []).forEach((run, index) => {
+      if (isNaN(run.scheduledAt.getTime())) return;
+      const id = `scheduled_${run.name}_${run.scheduledAt.getTime()}_${index}`;
+      if (seenIds.has(id)) return;
+      seenIds.add(id);
+
+      result.push({
+        id,
+        content: run.name,
+        start: run.scheduledAt,
+        group: 'main',
+        className: 'status-scheduled',
+        type: 'point',
+        title: `${run.name} - scheduled for ${dayjs(run.scheduledAt).format('YYYY-MM-DD HH:mm')}`,
+      });
+    });
+
     return result;
-  }, [input, config.tz, getValidTimezone]);
+  }, [input, config.tz, getValidTimezone, upcomingRuns]);
 
   // The window the timeline should show for the currently selected date.
   const viewWindow = React.useMemo(() => {
@@ -611,6 +636,21 @@ function DashboardTimeChart({
         }
         .vis-current-time {
           background-color: var(--destructive) !important;
+        }
+        /* Upcoming scheduled runs: blue, hollow, and visibly "not yet" */
+        .vis-item.status-scheduled {
+          background-color: #3b82f6 !important;
+          border-color: #3b82f6 !important;
+          color: #3b82f6 !important;
+        }
+        .vis-item.vis-point.status-scheduled .vis-dot {
+          border-color: #3b82f6 !important;
+          border-width: 5px !important;
+          background-color: #3b82f6 !important;
+        }
+        .vis-item.status-scheduled .vis-item-content {
+          color: #3b82f6 !important;
+          opacity: 0.85;
         }
         `}
       </style>
