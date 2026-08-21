@@ -11,8 +11,9 @@ type definition struct {
 	// Description is the description of the DAG.
 	Description string
 	// Type is the execution type for steps (graph, chain, or agent).
-	// Default is "graph" which uses dependency-based execution.
-	// "chain" executes steps in the order they are defined.
+	// Default is "chain", which implicitly makes each step depend on the
+	// preceding one in addition to any explicit `depends`.
+	// "graph" uses dependency-based execution and honors only explicit `depends`.
 	// "agent" is reserved for future agent-based execution.
 	Type string
 	// Shell is the default shell to use for all steps in this DAG.

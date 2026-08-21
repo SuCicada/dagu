@@ -3,6 +3,13 @@ internal/service/frontend/assets/fonts/*
 internal/service/frontend/assets/*
 !internal/service/frontend/assets/.gitkeep
 
+# built documentation site (embedded into the binary by `make docs`)
+internal/service/frontend/docs/*
+!internal/service/frontend/docs/.gitkeep
+docs/origin/.vitepress/dist
+docs/origin/.vitepress/cache
+docs/origin/node_modules
+
 # NVM
 .nvmrc
 

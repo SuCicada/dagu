@@ -19,6 +19,7 @@ coverage.html
 
 # Build artifacts
 internal/service/frontend/assets/
+internal/service/frontend/docs/
 dist/
 
 # IDE
@@ -32,9 +33,20 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Documentation (not needed in container)
+# Documentation
+# The VitePress site under docs/origin IS needed - it is built into the binary
+# and served at /docs - so its sources must stay in the build context.
 *.md
 !README.md
+!docs/origin/**/*.md
+
+# Docs build artifacts / deps (never send these to the daemon)
+docs/origin/node_modules
+docs/origin/node_modules/**
+docs/origin/.vitepress/dist
+docs/origin/.vitepress/dist/**
+docs/origin/.vitepress/cache
+docs/origin/.vitepress/cache/**
 
 # Test data
 tmp/
@@ -50,6 +62,7 @@ deploy/
 # Kubernetes
 *.yaml
 !ui/*.yaml
+!docs/origin/**/*.yaml
 /data
 .local
 .agents/

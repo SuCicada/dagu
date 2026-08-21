@@ -11,6 +11,22 @@ RUN rm -rf node_modules; \
   pnpm install --frozen-lockfile; \
   pnpm build
 
+# Stage 1b: Docs Builder (VitePress site served at /docs)
+FROM --platform=$BUILDPLATFORM node:24-alpine AS docs-builder
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
+WORKDIR /docs
+# No git checkout in this stage; skip VitePress's git-based lastUpdated lookup
+ENV DOCS_NO_GIT=1
+COPY docs/origin/ ./
+# vitepress is invoked directly: `pnpm run` re-verifies dependencies first,
+# which repeats the install without --allow-build and fails on esbuild.
+RUN rm -rf node_modules; \
+  pnpm install --frozen-lockfile; \
+  ./node_modules/.bin/vitepress build
+
 # Stage 2: Go Builder
 FROM --platform=$TARGETPLATFORM golang:1.25-alpine AS go-builder
 ARG LDFLAGS
@@ -23,6 +39,7 @@ COPY . .
 RUN rm -rf frontend/assets
 
 COPY --from=ui-builder /app/dist/ ./internal/service/frontend/assets/
+COPY --from=docs-builder /docs/.vitepress/dist/ ./internal/service/frontend/docs/
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="${LDFLAGS}" -o ./bin/dagu -v ./cmd

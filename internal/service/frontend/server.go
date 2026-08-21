@@ -273,6 +273,24 @@ func (srv *Server) setupRoutes(ctx context.Context, r *chi.Mux) error {
 		fileServer.ServeHTTP(w, r)
 	})
 
+	// Serve the bundled documentation site, when one was built into the binary
+	if site, ok := docsSite(); ok {
+		docsRoot := path.Join(strings.TrimRight(basePath, "/"), docsRoutePrefix)
+		if !strings.HasPrefix(docsRoot, "/") {
+			docsRoot = "/" + docsRoot
+		}
+		handler := docsHandler(site, docsRoot)
+		r.Get(docsRoot+"/*", handler)
+		// middleware.RedirectSlashes already rewrites "/docs/" to "/docs", so
+		// the bare path serves the index directly - redirecting back to the
+		// trailing-slash form here would loop. VitePress emits absolute URLs
+		// rooted at the configured base, so nothing depends on the slash.
+		r.Get(docsRoot, handler)
+		logger.Info(ctx, "Documentation UI enabled", tag.Path(docsRoot))
+	} else {
+		logger.Debug(ctx, "No documentation build embedded; /docs is disabled")
+	}
+
 	// Serve UI pages
 	indexHandler := srv.useTemplate(ctx, "index.gohtml", "index")
 

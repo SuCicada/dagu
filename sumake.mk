@@ -15,3 +15,11 @@ run:
 .PHONY: deploy
 deploy:
 	cd ../SuConfig/linux/asus && make docker-dagu
+
+include ../SuConfig/linux/asus/config.mk
+include ../SuConfig/deploy/import.mk
+
+# deploy2:
+# 	$(call docker_build_remote, ./, dagu)
+# 	$(call deploy_docker_compose, dagu)
+	# $(call upload, tool/, TOOL/su-home-okaeri/)

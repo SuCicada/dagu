@@ -56,6 +56,11 @@ FE_ASSETS_DIR=${FE_DIR}/assets
 FE_BUILD_DIR=./ui/dist
 FE_BUNDLE_JS=${FE_ASSETS_DIR}/bundle.js
 
+# Documentation site (VitePress). Built into the binary and served at /docs.
+DOCS_SRC_DIR=./docs/origin
+DOCS_BUILD_DIR=${DOCS_SRC_DIR}/.vitepress/dist
+DOCS_ASSETS_DIR=${FE_DIR}/docs
+
 # Colors for the output
 
 COLOR_GREEN=\033[0;32m
@@ -236,7 +241,7 @@ certs: ${CERTS_DIR} ${SERVER_CERT_FILE} ${CLIENT_CERT_FILE} certs-check
 
 # build build the binary.
 .PHONY: build
-build: ui bin
+build: ui docs bin
 
 # build-image build the docker image and push to the registry.
 # VERSION should be set via the argument as follows:
@@ -343,6 +348,32 @@ build-keepalive:
 .PHONY: ui
 # ui builds the frontend codes.
 ui: clean-ui build-ui cp-assets
+
+# docs builds the documentation site and stages it for embedding.
+.PHONY: docs
+docs: build-docs cp-docs
+
+# build-docs builds the VitePress documentation site.
+.PHONY: build-docs
+build-docs:
+	@echo "${COLOR_GREEN}Building docs...${COLOR_RESET}"
+	@cd ${DOCS_SRC_DIR}; \
+		pnpm install --frozen-lockfile; \
+		./node_modules/.bin/vitepress build
+
+# cp-docs stages the built docs where go:embed picks them up.
+.PHONY: cp-docs
+cp-docs:
+	@echo "${COLOR_GREEN}Copying docs...${COLOR_RESET}"
+	@find ${DOCS_ASSETS_DIR} -mindepth 1 ! -name .gitkeep -delete
+	@cp -R ${DOCS_BUILD_DIR}/. ${DOCS_ASSETS_DIR}/
+
+# clean-docs removes the staged docs so the binary is built without them.
+.PHONY: clean-docs
+clean-docs:
+	@echo "${COLOR_GREEN}Cleaning docs...${COLOR_RESET}"
+	@find ${DOCS_ASSETS_DIR} -mindepth 1 ! -name .gitkeep -delete
+	@rm -rf ${DOCS_BUILD_DIR}
 
 # build-ui builds the frontend codes.
 .PHONY: build-ui
