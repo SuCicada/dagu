@@ -20,6 +20,7 @@ func toDAG(dag *core.DAG) api.DAG {
 		DefaultParams: ptrOf(dag.DefaultParams),
 		Tags:          ptrOf(dag.Tags),
 		Schedule:      ptrOf(schedules),
+		Dashboard:     ptrTo(dag.Dashboard),
 	}
 }
 
@@ -269,6 +270,7 @@ func toDAGDetails(dag *core.DAG) *api.DAGDetails {
 		Steps:             ptrOf(steps),
 		Tags:              ptrOf(dag.Tags),
 		RunConfig:         runConfig,
+		Dashboard:         ptrTo(dag.Dashboard),
 	}
 
 	return ret

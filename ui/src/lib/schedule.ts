@@ -47,6 +47,8 @@ export function getUpcomingRuns(
   for (const file of dagFiles) {
     const dag = file.dag;
     if (!dag?.name || file.suspended) continue;
+    // Opted out of the dashboard: no upcoming markers for this DAG.
+    if (dag.dashboard === false) continue;
 
     const schedules = dag.schedule;
     if (!schedules || schedules.length === 0) continue;

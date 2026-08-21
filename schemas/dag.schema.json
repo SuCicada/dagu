@@ -104,6 +104,11 @@
       ],
       "description": "Schedule configuration for the DAG. Can be a simple cron expression, multiple cron expressions, or an object with start/stop/restart schedules. If omitted, the DAG will only run manually."
     },
+    "dashboard": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this DAG appears on the dashboard timeline. When false, both its upcoming scheduled runs and its finished runs are hidden and it is excluded from the metric cards. Failed runs are always shown so breakage stays visible. Useful for high-frequency schedules that would otherwise flood the timeline."
+    },
     "skipIfSuccessful": {
       "type": "boolean",
       "description": "When true, Dagu checks if this DAG has already succeeded since the last scheduled time. If it has, Dagu will skip the current scheduled run. This is useful for resource-intensive tasks or data processing jobs that shouldn't run twice. Note: Manual triggers always run regardless of this setting."

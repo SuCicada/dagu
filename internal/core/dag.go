@@ -73,6 +73,9 @@ type DAG struct {
 	// SkipIfSuccessful indicates whether to skip the DAG if it was successful previously.
 	// E.g., when the DAG has already been executed manually before the scheduled time.
 	SkipIfSuccessful bool `json:"skipIfSuccessful,omitempty"`
+	// Dashboard indicates whether the DAG is shown on the dashboard timeline.
+	// Defaults to true; when false only its failed runs are displayed.
+	Dashboard bool `json:"dashboard"`
 	// Env contains a list of environment variables to be set before running the DAG.
 	Env []string `json:"env,omitempty"`
 	// LogDir is the directory where the logs are stored.

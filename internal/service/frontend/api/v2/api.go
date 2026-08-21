@@ -391,6 +391,13 @@ func ptrOf[T any](v T) *T {
 	return &v
 }
 
+// ptrTo returns a pointer to v even when v is the zero value. Use it for
+// fields where the zero value is meaningful - ptrOf collapses those to nil,
+// which drops them from the JSON response entirely.
+func ptrTo[T any](v T) *T {
+	return &v
+}
+
 func valueOf[T any](ptr *T) T {
 	if ptr == nil {
 		var zero T

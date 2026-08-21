@@ -96,6 +96,7 @@ var builderRegistry = []builderEntry{
 	{metadata: true, name: "env", fn: buildEnvs},
 	{metadata: true, name: "schedule", fn: buildSchedule},
 	{metadata: true, name: "skipIfSuccessful", fn: skipIfSuccessful},
+	{metadata: true, name: "dashboard", fn: buildDashboard},
 	{metadata: true, name: "params", fn: buildParams},
 	{metadata: true, name: "name", fn: buildName},
 	{metadata: true, name: "type", fn: buildType},
@@ -953,6 +954,13 @@ func maxHistoryRetentionDays(_ BuildContext, spec *definition, dag *core.DAG) er
 // skipIfSuccessful sets the skipIfSuccessful field for the DAG.
 func skipIfSuccessful(_ BuildContext, spec *definition, dag *core.DAG) error {
 	dag.SkipIfSuccessful = spec.SkipIfSuccessful
+	return nil
+}
+
+// buildDashboard resolves whether the DAG is shown on the dashboard.
+// Omitting the field keeps the DAG visible.
+func buildDashboard(_ BuildContext, spec *definition, dag *core.DAG) error {
+	dag.Dashboard = spec.Dashboard == nil || *spec.Dashboard
 	return nil
 }
 

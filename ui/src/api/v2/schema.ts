@@ -972,6 +972,8 @@ export interface components {
             name: string;
             /** @description List of scheduling expressions defining when DAG-runs should be created from this DAG */
             schedule?: components["schemas"]["Schedule"][];
+            /** @description Whether this DAG is shown on the dashboard timeline. When false, only its failed runs are displayed. */
+            dashboard?: boolean;
             /** @description Human-readable description of the DAG's purpose and behavior */
             description?: string;
             /** @description List of parameter names that can be passed to DAG-runs created from this DAG */
@@ -1080,6 +1082,8 @@ export interface components {
             name: string;
             /** @description List of scheduling expressions defining when DAG-runs should be created from this DAG */
             schedule?: components["schemas"]["Schedule"][];
+            /** @description Whether this DAG is shown on the dashboard timeline. When false, only its failed runs are displayed. */
+            dashboard?: boolean;
             /** @description Human-readable description of the DAG's purpose and behavior */
             description?: string;
             /** @description List of environment variables to set before executing a DAG-run */

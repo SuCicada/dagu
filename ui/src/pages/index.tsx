@@ -324,11 +324,31 @@ function Dashboard(): React.ReactElement | null {
     // scheduleEpoch is not read above - it exists to roll the window forward
   }, [dagsData, config.tz, scheduleEpoch]);
 
-  // Extract unique dagRun names for the select dropdown - must be before conditional returns
-  const dagRunsList: DAGRunSummary[] = React.useMemo(
+  // DAGs that opted out of the dashboard via `dashboard: false`.
+  const hiddenDAGs = React.useMemo(() => {
+    const names = new Set<string>();
+    (dagsData?.dags || []).forEach((file) => {
+      if (file.dag?.name && file.dag.dashboard === false) {
+        names.add(file.dag.name);
+      }
+    });
+    return names;
+  }, [dagsData]);
+
+  const allDAGRuns: DAGRunSummary[] = React.useMemo(
     () => data?.dagRuns || [],
     [data]
   );
+
+  // Runs of opted-out DAGs are kept off the dashboard, except failures - those
+  // stay visible so a hidden DAG breaking is still noticeable.
+  const dagRunsList: DAGRunSummary[] = React.useMemo(() => {
+    if (hiddenDAGs.size === 0) return allDAGRuns;
+    return allDAGRuns.filter(
+      (dagRun) =>
+        !hiddenDAGs.has(dagRun.name) || dagRun.status === Status.Failed
+    );
+  }, [allDAGRuns, hiddenDAGs]);
 
   // This useMemo hook must be called unconditionally
   const uniqueDAGRunNames = React.useMemo(() => {

@@ -30,6 +30,11 @@ type definition struct {
 	// SkipIfSuccessful is the flag to skip the DAG on schedule when it is
 	// executed manually before the schedule.
 	SkipIfSuccessful bool
+	// Dashboard controls whether this DAG appears on the dashboard timeline.
+	// Defaults to true. When set to false the DAG is kept off the dashboard
+	// (both its upcoming scheduled runs and its finished runs), except for
+	// failed runs, which are always shown so breakage stays visible.
+	Dashboard *bool
 	// LogFile is the file to write the log.
 	LogDir string
 	// Env is the environment variables setting.
