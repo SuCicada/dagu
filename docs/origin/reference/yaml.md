@@ -55,6 +55,7 @@ handlerOn:
 | `tags` | array | Tags for categorization | `[]` |
 | `group` | string | Group name for organization | - |
 | `type` | string | Execution type: `chain` or `graph` | `chain` |
+| `dashboard` | boolean | Show this DAG on the dashboard timeline | `true` |
 
 ### Execution Type
 
@@ -98,6 +99,21 @@ steps:
       command: ./b.sh
   - name: finish
     command: ./finish.sh # waits for both
+```
+
+### Dashboard Visibility
+
+Set `dashboard: false` to keep a noisy DAG off the dashboard timeline — both its
+upcoming scheduled runs (the blue markers) and its finished runs are hidden, and it
+stops contributing to the metric cards.
+
+**Failed runs are always shown**, so a hidden DAG breaking is still visible:
+
+```yaml
+dashboard: false        # default: true
+schedule: "*/15 * * * *"   # 96 runs a day would otherwise flood the timeline
+steps:
+  - command: ./poll.sh
 ```
 
 ### Scheduling Fields
